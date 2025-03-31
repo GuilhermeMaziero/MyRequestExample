@@ -1,0 +1,800 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sp_widget">
+    <sp_widget action="INSERT_OR_UPDATE">
+        <category>custom</category>
+        <client_script><![CDATA[api.controller = function($scope) {
+    /* widget controller */
+    var c = this;
+
+    $scope.ticket = null;
+
+    $scope.filters = c.data.filters;
+
+    //My requests Items DEFAULT
+    $scope.type_filter_selected = c.data.default_filter;
+
+    $scope.loading = true;
+    $scope.sortColumn = 'updated_at';
+    $scope.reverseSort = false;
+
+    $scope.sortData = function(column) {
+        $scope.reverseSort = ($scope.sortColumn == column) ? !$scope.reverseSort : false;
+        $scope.sortColumn = column;
+    };
+
+    $scope.removeFilter = function() {
+        c.data.ticket = null;
+        $scope.loading = true;
+        c.server.update().then(function() {
+            $scope.loading = false;
+        });
+    };
+
+    $scope.getSortClass = function(column) {
+        if ($scope.sortColumn == column) {
+            return $scope.reverseSort ? 'glyphicon glyphicon-chevron-down' : 'glyphicon glyphicon-chevron-up';
+        }
+        return '';
+    };
+
+    // Pagination logic
+    var pagesPerBlock = 4;
+
+    c.setPage = function(page) {
+        $scope.loading = true;
+        if (page < 1 || page > c.data.totalPages) return;
+        c.data.currentPage = page;
+        c.server.update().then(function() {
+            $scope.loading = false;
+        });
+    };
+
+    c.getTicket = function(value) {
+
+        var ticket_trim = value.trim();
+
+        $scope.loading = true;
+        c.data.ticket = ticket_trim;
+        c.data.currentPage = 1;
+        c.server.update().then(function() {
+            $scope.loading = false;
+        });
+    };
+
+    c.prevPage = function() {
+        if (c.data.currentPage > 1) {
+            c.setPage(c.data.currentPage - 1);
+        }
+    };
+
+    c.nextPage = function() {
+        if (c.data.currentPage < c.data.totalPages) {
+            c.setPage(c.data.currentPage + 1);
+        }
+    };
+
+    c.prevBlock = function() {
+        if (c.data.currentPage > 1) {
+            c.setPage(1);
+        }
+    };
+
+    c.nextBlock = function() {
+        if (c.data.currentPage < c.data.totalPages) {
+            c.setPage(c.data.totalPages);
+        }
+    };
+
+    c.getVisiblePages = function() {
+        var startPage = Math.max(1, c.data.currentPage - Math.floor(pagesPerBlock / 2));
+        var endPage = Math.min(c.data.totalPages, startPage + pagesPerBlock - 1);
+
+        if (endPage - startPage + 1 < pagesPerBlock) {
+            startPage = Math.max(1, endPage - pagesPerBlock + 1);
+        }
+
+        var pages = [];
+        for (var i = startPage; i <= endPage; i++) {
+            pages.push(i);
+        }
+        return pages;
+    };
+
+    $scope.loading = false;
+
+
+    $scope.getRecords = function(filter) {
+        c.data.currentPage = 1;
+
+        if (!filter) {
+            filter = c.data.default_filter;
+        }
+
+        c.data.filter_selected = filter;
+        $scope.loading = true;
+        c.server.update().then(function() {
+
+            $scope.loading = false;
+        });
+    };
+
+    $scope.columns = {
+        ticket: true,
+        description: true,
+        status: true,
+        startDate: true
+    };
+
+    $scope.showColumnSettings = false;
+
+    $scope.toggleColumnSettings = function() {
+        $scope.showColumnSettings = !$scope.showColumnSettings;
+    };
+
+
+    $scope.isDrawerOpen = false;
+
+    $scope.toggleDrawer = function() {
+        $scope.isDrawerOpen = !$scope.isDrawerOpen;
+    };
+
+    $scope.applyFilter = function(e) {
+
+        e.preventDefault();
+
+        $scope.getRecords($scope.type_filter_selected);
+
+        $scope.toggleDrawer();
+    };
+
+    $scope.getRecords();
+
+
+    $scope.exportToCSV = function () {
+        c.server.get({
+            filter_selected:$scope.type_filter_selected,
+            action:'export_csv'
+        }).then(function(response) {
+            
+            var csvContent = "data:text/csv;charset=utf-8,";
+            var headers = ["TICKET", "DESCRIPTION", "STATE", "CREATED_AT","UPDATED_AT"];
+            csvContent += headers.join(";") + "\n";
+
+            response.data.export_items.forEach(function (item) {
+                var row = [
+                    item.number,
+                    item.short_description ? item.short_description.replace(/;/g, ",") : "",
+                    item.state_value,
+                    item.created_at,
+                    item.updated_at
+                ];
+                csvContent += row.join(";") + "\n";
+            });
+
+            var encodedUri = encodeURI(csvContent);
+            var link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "tickets.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            c.data.export_csv = false;
+        });
+
+    }
+
+};]]></client_script>
+        <controller_as>c</controller_as>
+        <css>/* loading page */
+
+.csa-panel-heading {
+
+  margin-bottom: 20px;
+}
+
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.loading-spinner {
+  text-align: center;
+  font-size: 24px;
+  color: #1E3A80;
+}
+
+.loading-spinner i {
+  font-size: 30px;
+  color: #1E3A80;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.blurred {
+  filter: blur(3px);
+  transition: filter 0.3s ease;
+}
+
+
+.loading-spinner p {
+  margin-top: 10px;
+  font-size: 18px;
+  color: #1E3A80;
+}
+
+
+.page-header h1 {
+  font-size: 28px;
+  color: #1E3A80;
+}
+
+.form-select-mz {
+  width: 100%;
+  padding: 10px;
+  font-size: 16px;
+  border: 1px solid #CDD5D2;
+  border-radius: 8px;
+  background-color: transparent;
+  color: #333;
+  outline: none;
+  cursor: pointer;
+}
+
+
+.header-table {
+  width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom: 20px;
+
+  gap: 6px;
+
+}
+
+.search-config {
+  width: 100%;
+}
+
+.sort-indicator {
+  margin-left: 10px;
+}
+
+.search-box {
+  position: relative;
+  width: 30%;
+}
+
+.search-box input {
+  padding: 8px 40px 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  width: 100%;
+  color:#8D8D99;
+  font-size:normal;
+}
+
+.search-box input::placeholder {
+  color: #cccccc;
+  opacity: 1;
+}
+
+
+.search-button {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  margin-left: -30px;
+}
+
+.search-button i {
+  padding-top: 5px;
+  color: #8D8D99;
+}
+
+.main-container {
+  display:flex;
+  flex-direction:column;
+  max-width:100% auto;
+}
+
+/*css Table */
+
+.table-divider {
+
+  width: 100%;
+  border-spacing: 0 1rem;
+  border-collapse:separate;
+}
+
+.table-divider thead { 
+  position: sticky; 
+  top: 0; 
+  z-index: 10;
+  background-color:#fafafa;
+}
+
+.table-divider tbody tr {
+  transition: transform 0.3s ease;
+}
+
+
+.table-divider tbody tr:hover {
+  transform: translateY(-5px);
+}
+
+
+.table-divider  th {
+  color: gray;
+  font-weight: 600;
+  padding: 1rem 2rem;
+  text-align: left;
+  line-height: 1.5rem;
+
+}
+
+.table-divider th:hover {
+  background-color: #f1f1f1;
+}
+
+.table-divider td {
+
+  color: inherit;
+  padding: 2rem 2rem;
+  border: 0;
+  background: #fafafa;
+  border-radius: 0.25rem;
+
+}
+
+.table-scroll-y {
+  max-height: 500px;
+  overflow-y: auto;
+  display: block;
+}
+
+.link-record, .link-record i {
+
+  color: inherit;
+}
+
+.no-data { 
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+.pagination-wrapper {
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  margin-bottom:20px;
+}
+
+.pagination-ticket {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 10px 0;
+  margin: 0;
+}
+
+.pagination-ticket li {
+  margin: 5px;
+}
+
+
+.circle-pages {
+  color: #1E3A80;
+  padding: 10px 15px;
+  text-decoration: none;
+  min-width: 40px;
+  transition: background-color 0.3s;
+  border-radius: 50%;
+  border:1px solid #1E3A80;
+  display: block;
+  text-align: center;
+  font-size:12px;
+}
+
+
+.pagination &gt; li:first-child &gt; a {
+
+  border-radius: 50%;
+}
+
+.pagination &gt; li:last-child &gt; a {
+
+  border-radius: 50%;
+}
+
+
+.mb-3 {
+
+  margin: 20px 0px !important;
+}
+
+
+.open-drawer-btn {
+  padding: 10px 25px;
+  background: #4F52BD;
+  color: white;
+  border: none;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.drawer {
+  position: fixed;
+  top: 0;
+  right: -500px; 
+  width: 500px;
+  height: 100%;
+  background: white;
+  box-shadow: -2px 0 10px rgba(0, 0, 0, 0.2);
+  transition: right 0.3s ease-in-out;
+  padding: 20px;
+  z-index: 1000;
+}
+
+
+.drawer.open {
+  right: 0;
+}
+
+
+.drawer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #ccc;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+}
+
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+
+.apply-btn {
+  margin-top: 15px;
+  width: 100%;
+  background: #4F52BD;
+  color: white;
+  padding: 10px;
+  border: none;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease-in-out;
+  z-index: 999;
+}
+
+.overlay.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+@media screen and (max-width: 768px) {
+
+  .search-box {
+    width:100%;
+  }
+
+  .table-divider  th {
+    font-size: 14px;
+  }
+
+  .table-divider td {
+    font-size: 12px;
+  }
+}</css>
+        <data_table>sp_instance</data_table>
+        <demo_data/>
+        <description/>
+        <docs/>
+        <field_list/>
+        <has_preview>false</has_preview>
+        <id>wd_my_request_example</id>
+        <internal>false</internal>
+        <link><![CDATA[function link(scope, element, attrs, controller) {
+  
+}]]></link>
+        <name>My Request Widget Example</name>
+        <option_schema/>
+        <public>false</public>
+        <roles>snc_internal</roles>
+        <script><![CDATA[(function () {
+    var client_input = input || {};
+    data.default_filter = gs.getProperty('x_622225_w_my_req.default_my_request_filter', '');
+    data.filters = data.filters || [];
+    data.items_records = data.items_records || [];
+    data.export_items = data.export_items || [];
+    data.currentPage = client_input.currentPage || 1;
+    data.pageSize = 15;
+    data.totalRecords = data.totalRecords || 0;
+    
+    var offset = (data.currentPage - 1) * data.pageSize;
+
+    if (!data.filter_initialized) {
+        var c_filter = new GlideRecord('request_filter');
+        c_filter.addEncodedQuery("applies_toIN1,10");
+        c_filter.addActiveQuery();
+        c_filter.query();
+
+        while (c_filter.next()) {
+            data.filters.push({
+                id: c_filter.getValue('sys_id'),
+                display_value: c_filter.getValue('title'),
+            });
+        }
+        data.filter_initialized = true;
+    }
+
+    if (client_input && client_input.action == 'export_csv') {
+        data.export_items = exportCSV(client_input); 
+        return;
+    }
+
+    if (client_input.ticket) {
+        var getTicket = new GlideRecord('task');
+        getTicket.addQuery('number', '=', client_input.ticket);
+        getTicket.query();
+
+        if (getTicket.next()) {
+            data.items_records.push({
+                number: getTicket.getValue('number'),
+                short_description: getTicket.getValue('short_description'),
+                state: getTicket.getDisplayValue('state'),
+                state_value: getTicket.getValue('state'),
+                updated_at: getTicket.getDisplayValue('sys_updated_on'),
+                link: '?id=ticket&table=' + getTicket.getValue('sys_class_name') + '&sys_id=' + getTicket.getValue('sys_id')
+            });
+        }
+
+        data.totalPages = 1;
+        return;
+    }
+
+    if (client_input.filter_selected) {
+        data.items_records = getMyRequests(client_input);
+    }
+
+    function getMyRequests(client_input) {
+        var records = [];
+
+        var rq_filter = new GlideRecord('request_filter');
+        rq_filter.addQuery('sys_id', client_input.filter_selected);
+        rq_filter.query();
+
+        if (rq_filter.next()) {
+            var tableName = rq_filter.getValue('table');
+            var encodedQuery = rq_filter.getValue('filter');
+
+            data.totalRecords = getRecordCount(tableName, encodedQuery);
+
+            var grCurrentFilter = new GlideRecord(tableName);
+            grCurrentFilter.addEncodedQuery(encodedQuery);
+            grCurrentFilter.orderByDesc('sys_updated_on');
+            grCurrentFilter.chooseWindow(offset, offset + data.pageSize);
+            grCurrentFilter.query();
+
+            while (grCurrentFilter.next()) {
+                records.push({
+                    number: grCurrentFilter.getValue('number'),
+                    short_description: grCurrentFilter.getValue('short_description'),
+                    state: grCurrentFilter.getDisplayValue('state'),
+                    state_value: grCurrentFilter.getValue('state'),
+                    updated_at: grCurrentFilter.getDisplayValue('sys_updated_on'),
+                    link: '?id=ticket&table=' + grCurrentFilter.getValue('sys_class_name') + '&sys_id=' + grCurrentFilter.getValue('sys_id')
+                });
+            }
+        }
+
+        data.totalPages = Math.ceil(data.totalRecords / data.pageSize);
+        return records;
+    }
+
+    function getRecordCount(tableName, query) {
+        var gr = new GlideAggregate(tableName);
+        gr.addEncodedQuery(query);
+        gr.addAggregate('COUNT');
+        gr.query();
+        return gr.next() ? parseInt(gr.getAggregate('COUNT'), 10) : 0;
+    }
+
+    function exportCSV(client_input) {
+        var records = [];
+
+        var rq_filter = new GlideRecord('request_filter');
+        rq_filter.addQuery('sys_id', client_input.filter_selected);
+        rq_filter.query();
+
+        if (rq_filter.next()) {
+            var tableName = rq_filter.getValue('table');
+            var grCurrentFilter = new GlideRecord(tableName);
+            grCurrentFilter.addEncodedQuery(rq_filter.getValue('filter'));
+            grCurrentFilter.orderByDesc('sys_updated_on');
+            grCurrentFilter.query();
+
+            while (grCurrentFilter.next()) {
+                records.push({
+                    number: grCurrentFilter.getValue('number'),
+                    short_description: grCurrentFilter.getValue('short_description'),
+                    state_value: grCurrentFilter.getDisplayValue('state'),
+                    created_at: grCurrentFilter.getDisplayValue('sys_created_on'),
+                    updated_at: grCurrentFilter.getDisplayValue('sys_updated_on'),
+                });
+            }
+        }
+        return records;
+    }
+
+})();
+]]></script>
+        <servicenow>false</servicenow>
+        <sys_class_name>sp_widget</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2025-03-28 23:33:43</sys_created_on>
+        <sys_id>c25ec802c3206210f0f43adc050131ef</sys_id>
+        <sys_mod_count>132</sys_mod_count>
+        <sys_name>My Request Widget Example</sys_name>
+        <sys_package display_value="Widget My Request Example" source="x_622225_w_my_req">9da9800ac3ec2210f0f43adc050131c9</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Widget My Request Example">9da9800ac3ec2210f0f43adc050131c9</sys_scope>
+        <sys_update_name>sp_widget_c25ec802c3206210f0f43adc050131ef</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2025-03-31 01:41:49</sys_updated_on>
+        <template><![CDATA[<div class="loading-overlay" ng-if="loading">
+  <div class="loading-spinner">
+    <i class="glyphicon glyphicon-refresh spinning"></i>
+    <p>Carregando...</p>
+  </div>
+</div>
+
+
+
+<div class="csa-panel-heading mt">
+  <h2>My Requests</h2>
+</div>
+
+<div class="main-container" ng-class="{'blurred': loading}">
+  <div class="header-table">
+    <div class="search-box">
+      <input type="text" name="filter_ticket" ng-model="ticket" placeholder="Search Requests">
+      <button type="button" ng-click="c.getTicket(ticket)" class="search-button"><i class="glyphicon glyphicon-search"/></button>
+    </div>
+    <div></div>
+    <div>
+      <button type="button" ng-click="exportToCSV()" class="open-drawer-btn"><i class="glyphicon glyphicon-export"></i> Export To CSV</button>
+      <button type="button" class="open-drawer-btn" ng-click="toggleDrawer()"><i class="glyphicon glyphicon-filter"></i> FILTER</button>
+    </div>
+  </div>
+  <div ng-if="!c.data.items_records.length" id="noDataMessage" class="no-data">${No records found}</div>
+  <div class="table-responsive table-scroll-y">
+    <table class="table-divider"  ng-if="c.data.items_records.length > 0">
+      <thead>
+        <tr>
+          <th class="col-md-2" ng-click="sortData('ticket')" ng-show="columns.ticket">NUMBER
+            <span class="sort-indicator" ng-show="sortColumn == 'ticket'">
+              <i ng-class="{'glyphicon glyphicon-chevron-down': reverseSort, 'glyphicon glyphicon-chevron-up': !reverseSort}"></i>
+            </span>
+          </th>
+          <th class="col-md-6" ng-click="sortData('description')" ng-show="columns.description">DESCRIPTION
+            <span class="sort-indicator" ng-show="sortColumn == 'description'">
+              <i ng-class="{'glyphicon glyphicon-chevron-down': reverseSort, 'glyphicon glyphicon-chevron-up': !reverseSort}"></i>
+            </span>
+          </th>
+          <th class="col-md-1" ng-click="sortData('status')" ng-show="columns.status">STATE
+            <span class="sort-indicator" ng-show="sortColumn == 'status'">
+              <i ng-class="{'glyphicon glyphicon-chevron-down': reverseSort, 'glyphicon glyphicon-chevron-up': !reverseSort}"></i>
+            </span>
+          </th>
+          <th class="col-md-3" ng-click="sortData('updated_at')" ng-show="columns.startDate">UPDATED AT
+            <span class="sort-indicator" ng-show="sortColumn == 'updated_at'">
+              <i ng-class="{'glyphicon glyphicon-chevron-down': reverseSort, 'glyphicon glyphicon-chevron-up': !reverseSort}"></i>
+            </span>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr ng-repeat="item in itemRecord = (c.data.items_records | filter:searchText | orderBy:sortColumn:reverseSort | limitTo:pageSize:(c.data.currentPage-1)* c.data.pageSize)">
+          <td ng-show="columns.ticket" class="col-md-2"><a class="link-record" ng-href="{{item.link}}"><span><i class="glyphicon glyphicon-new-window" /></span> {{item.number}}</a></td>
+          <td class="col-md-6" ng-show="columns.description">{{item.short_description}}</td>
+          <td class="col-md-1" ng-show="columns.status"><span >{{item.state}}</span></td>
+          <td class="col-md-3" ng-show="columns.startDate">{{item.updated_at}}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="pagination-wrapper" ng-if="c.data.items_records.length > 0" >
+    <ul class="pagination pagination-ticket">
+      <li ng-class="{disabled: c.data.currentPage <= 1}">
+        <a class="circle-pages" href="" ng-click="c.prevBlock()"><span><i class="glyphicon glyphicon-step-backward" /></span></a>
+      </li>
+      <li ng-class="{disabled: c.data.currentPage <= 1}">
+        <a class="circle-pages" href="" ng-click="c.prevPage()"><span><i class="glyphicon glyphicon-chevron-left" /></span></a>
+      </li>
+      <li ng-repeat="n in c.getVisiblePages()" ng-class="{active: n === c.data.currentPage}">
+        <a class="circle-pages" href="" ng-click="c.setPage(n)">{{ n }}</a>
+      </li>
+      <li ng-class="{disabled: c.data.currentPage >= c.data.totalPages}">
+        <a  class="circle-pages" href="" ng-click="c.nextPage()"><span><i class="glyphicon glyphicon-chevron-right" /></span></a>
+      </li>
+      <li ng-class="{disabled: c.data.currentPage >= c.data.totalPages}">
+        <a class="circle-pages" href="" ng-click="c.nextBlock()"><span><i class="glyphicon glyphicon-step-forward" /></span></a>
+      </li>
+    </ul>
+  </div>
+</div>
+
+<div class="drawer" ng-class="{'open': isDrawerOpen}">
+  <div class="drawer-header">
+    <h3>Filter</h3>
+    <button class="close-btn" ng-click="toggleDrawer()">✖</button>
+  </div>
+
+
+  <div class="container-fluid">
+    <form ng-submit="applyFilter($event)">
+      <div class="row mb-3">
+        <div class="col-md-12">
+          <div>
+            <label for="name"><strong>View</strong></label>
+            <div class="custom-select-mz">
+              <select class="form-select-mz" id="filters" ng-model="type_filter_selected" 
+                      ng-options="filter.id as filter.display_value for filter in filters">
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+      <button type="submit" class="apply-btn">Apply Filters</button>
+    </form>
+  </div>
+</div>
+
+<!-- Sobreposição ao abrir o drawer -->
+<div class="overlay" ng-class="{'visible': isDrawerOpen}" ng-click="toggleDrawer()"></div>]]></template>
+    </sp_widget>
+</record_update>
